@@ -32,11 +32,9 @@ export default function Highlights() {
               transition={{ delay: index * 0.1, duration: 0.5 }}
               className="relative group rounded-3xl overflow-hidden glass shadow-lg border border-white/50"
             >
-              <div className="aspect-[4/3] md:aspect-video relative bg-slate-900 flex items-center justify-center overflow-hidden">
-                <EmbeddedVideo 
-                  url={highlight.url} 
-                  className="w-full h-full object-contain"
-                />
+              {/* Le conteneur doit être relative + overflow-hidden pour que EmbeddedVideo (absolute inset-0) s'y insère */}
+              <div className="aspect-[4/3] md:aspect-video relative bg-slate-900 overflow-hidden">
+                <EmbeddedVideo url={highlight.url} />
               </div>
               <div className="p-5 flex items-center justify-between bg-white/40 backdrop-blur-md">
                 <h3 className="font-bold text-slate-800 truncate pr-4">{highlight.title || 'Moment Fort'}</h3>
