@@ -1,76 +1,123 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export type Highlight = {
   id: string;
-  url: string; 
+  url: string;
   title: string;
   likes: number;
 };
 
 const DEFAULT_HIGHLIGHTS: Highlight[] = [
-  { 
-    id: 'vid-1', 
-    url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4', 
-    title: 'Ambiance Studio Tabaski', 
-    likes: 42 
+  {
+    id: 'vid-1',
+    url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+    title: 'Ambiance Studio Tabaski',
+    likes: 42
   },
 ];
 
 export function useHighlights() {
-  const [highlights, setHighlights] = useState<Highlight[]>(() => {
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Charge les highlights depuis Supabase ou localStorage
+  const loadHighlights = useCallback(async () => {
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('highlights')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          setHighlights(data as Highlight[]);
+          setIsLoaded(true);
+          return;
+        }
+      } catch (err) {
+        console.warn('Supabase highlights fetch failed, falling back to localStorage', err);
+      }
+    }
+
+    // Fallback localStorage
     const saved = localStorage.getItem('senpixel_highlights_val');
     if (saved) {
       try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return DEFAULT_HIGHLIGHTS;
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) {
+          setHighlights(parsed);
+          setIsLoaded(true);
+          return;
+        }
+      } catch (_e) {
+        // ignore
       }
     }
-    return DEFAULT_HIGHLIGHTS;
-  });
+
+    // Données par défaut
+    setHighlights(DEFAULT_HIGHLIGHTS);
+    setIsLoaded(true);
+  }, []);
 
   useEffect(() => {
+    loadHighlights();
+  }, [loadHighlights]);
+
+  // Sauvegarde dans localStorage comme cache quand Supabase n'est pas configuré
+  useEffect(() => {
+    if (!isLoaded || isSupabaseConfigured) return;
     try {
       localStorage.setItem('senpixel_highlights_val', JSON.stringify(highlights));
     } catch (e) {
-      console.error("Failed to save to localStorage, quota exceeded?", e);
+      console.error('localStorage quota exceeded', e);
     }
-  }, [highlights]);
-
-  useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === 'senpixel_highlights_val' && event.newValue) {
-        try {
-          setHighlights(JSON.parse(event.newValue));
-        } catch (e) {
-          // ignore
-        }
-      }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+  }, [highlights, isLoaded]);
 
   const toggleLike = (id: string) => {
     const likedKey = `liked_vid_${id}`;
     const alreadyLiked = sessionStorage.getItem(likedKey);
     if (alreadyLiked) {
-      // Déjà liké : retirer le like
       sessionStorage.removeItem(likedKey);
-      setHighlights(prev => prev.map(p => p.id === id ? { ...p, likes: Math.max(0, p.likes - 1) } : p));
+      setHighlights((prev: Highlight[]) =>
+        prev.map((p: Highlight) => p.id === id ? { ...p, likes: Math.max(0, p.likes - 1) } : p)
+      );
     } else {
       sessionStorage.setItem(likedKey, 'true');
-      setHighlights(prev => prev.map(p => p.id === id ? { ...p, likes: p.likes + 1 } : p));
+      setHighlights((prev: Highlight[]) =>
+        prev.map((p: Highlight) => p.id === id ? { ...p, likes: p.likes + 1 } : p)
+      );
     }
   };
 
-  const addHighlight = (videoUrl: string, title: string = '') => {
+  const addHighlight = async (videoUrl: string, title: string = '') => {
     const newHighlight: Highlight = {
       id: `vid-${Date.now()}`,
       url: videoUrl,
       title: title,
       likes: 0
     };
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase
+          .from('highlights')
+          .insert([newHighlight])
+          .select()
+          .single();
+
+        if (!error && data) {
+          setHighlights((prev: Highlight[]) => [data as Highlight, ...prev]);
+          return;
+        } else {
+          console.error('Supabase insert error:', error);
+        }
+      } catch (err) {
+        console.warn('Supabase insert failed, falling back to localStorage', err);
+      }
+    }
+
+    // Fallback localStorage
     const next = [newHighlight, ...highlights];
     try {
       localStorage.setItem('senpixel_highlights_val', JSON.stringify(next));
@@ -80,9 +127,16 @@ export function useHighlights() {
     }
   };
 
-  const deleteHighlight = (id: string) => {
-    setHighlights(prev => prev.filter(p => p.id !== id));
+  const deleteHighlight = async (id: string) => {
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('highlights').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Supabase delete failed', err);
+      }
+    }
+    setHighlights((prev: Highlight[]) => prev.filter((p: Highlight) => p.id !== id));
   };
 
-  return { highlights, toggleLike, addHighlight, deleteHighlight };
+  return { highlights, toggleLike, addHighlight, deleteHighlight, reloadHighlights: loadHighlights };
 }
