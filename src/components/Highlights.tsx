@@ -100,14 +100,14 @@ export default function Highlights() {
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-4 px-1 -mx-1 scrollbar-hide"
+            className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-4 px-4 -mx-4 scrollbar-hide"
             style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
           >
             {highlights.map((highlight, index) => (
               <div
                 key={highlight.id}
                 data-card
-                className="snap-center flex-none w-[88vw] max-w-sm"
+                className="snap-center flex-none w-[calc(100vw-2.5rem)] max-w-[380px] min-w-0"
               >
                 <VideoCard
                   highlight={highlight}
@@ -176,8 +176,8 @@ function VideoCard({ highlight, index, onLike, mobile = false }: VideoCardProps)
       transition={{ delay: mobile ? 0 : index * 0.1, duration: 0.5 }}
       className="relative rounded-3xl overflow-hidden glass shadow-xl border border-white/50 flex flex-col"
     >
-      {/* Zone vidéo — aspect 16/9 sur mobile, 4/3 sur desktop petit */}
-      <div className="aspect-video relative bg-black overflow-hidden">
+      {/* Zone vidéo — aspect 16/9, largeur 100% explicite pour éviter l'écrasement mobile */}
+      <div className="w-full aspect-video relative bg-black overflow-hidden">
         <EmbeddedVideo
           url={highlight.url}
           title={highlight.title ?? 'Moment Fort'}

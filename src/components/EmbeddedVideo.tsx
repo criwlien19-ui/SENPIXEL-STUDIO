@@ -39,6 +39,7 @@ function getEmbedInfo(url: string): EmbedInfo {
       modestbranding: '1',
       playsinline: '1',
       enablejsapi: '1',
+      autoplay: '1',
     });
     return {
       type: 'youtube',
@@ -53,7 +54,7 @@ function getEmbedInfo(url: string): EmbedInfo {
     const params = new URLSearchParams({
       playsinline: '1',
       dnt: '1',
-      responsive: '1',
+      autoplay: '1',
     });
     return {
       type: 'vimeo',
@@ -86,7 +87,8 @@ function DirectVideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [playing, setPlaying] = useState(false);
+  // "started" = l'utilisateur a tapé une fois → on cache le bouton play définitivement
+  const [started, setStarted] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
 
   const handleLoad = useCallback(() => setLoading(false), []);
@@ -94,14 +96,12 @@ function DirectVideoPlayer({
     setLoading(false);
     setError(true);
   }, []);
-  const handlePlay = useCallback(() => setPlaying(true), []);
-  const handlePause = useCallback(() => setPlaying(false), []);
 
-  const togglePlay = useCallback(() => {
+  const handleStart = useCallback(() => {
+    setStarted(true);
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) v.play().catch(() => {});
-    else v.pause();
+    v.play().catch(() => {});
   }, []);
 
   const handleFullscreen = useCallback(() => {
@@ -114,11 +114,12 @@ function DirectVideoPlayer({
   const handleRetry = useCallback(() => {
     setError(false);
     setLoading(true);
+    setStarted(false);
     setRetryKey((k) => k + 1);
   }, []);
 
   return (
-    <div className="absolute inset-0 bg-black group touch-manipulation">
+    <div className="absolute inset-0 bg-black">
       {loading && !error && <LoadingOverlay />}
       {error ? (
         <ErrorOverlay onRetry={handleRetry} />
@@ -131,31 +132,29 @@ function DirectVideoPlayer({
             controls={controls}
             preload="metadata"
             playsInline
-            webkit-playsinline="true"
-            x5-playsinline="true"
-            className="w-full h-full object-contain"
+            // attributs propriétaires iOS / WeChat
+            {...({ 'webkit-playsinline': 'true', 'x5-playsinline': 'true' } as any)}
+            className="absolute inset-0 w-full h-full object-contain"
             onLoadedMetadata={handleLoad}
             onError={handleError}
-            onPlay={handlePlay}
-            onPause={handlePause}
             aria-label={title}
           />
 
-          {/* Bouton play central — visible quand en pause sur mobile */}
-          {!playing && !loading && (
+          {/* Bouton "tap to play" — disparaît après le premier tap (state one-shot) */}
+          {!started && !loading && (
             <button
-              onClick={togglePlay}
-              className="absolute inset-0 flex items-center justify-center z-10 bg-black/20 active:bg-black/40 transition-colors touch-manipulation"
+              onClick={handleStart}
+              className="absolute inset-0 flex items-center justify-center z-10 bg-black/25 touch-manipulation"
               aria-label="Lire la vidéo"
             >
-              <span className="flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-white/20 backdrop-blur-md border-2 border-white/60 shadow-2xl active:scale-95 transition-transform">
-                <Play className="w-7 h-7 md:w-9 md:h-9 text-white fill-white ml-1" />
+              <span className="flex items-center justify-center w-16 h-16 rounded-full bg-white/20 backdrop-blur-md border-2 border-white/60 shadow-2xl active:scale-95 transition-transform">
+                <Play className="w-7 h-7 text-white fill-white ml-1" />
               </span>
             </button>
           )}
 
-          {/* Bouton plein écran (mobile) — visible sur tap/hover */}
-          {!controls && playing && (
+          {/* Bouton plein écran flottant (uniquement sans contrôles natifs) */}
+          {started && !controls && (
             <button
               onClick={handleFullscreen}
               className="absolute bottom-3 right-3 z-20 p-2 rounded-full bg-black/50 text-white active:scale-95 transition-transform touch-manipulation"
@@ -184,6 +183,7 @@ function IframePlayer({
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // "activated" = iframe chargé après tap sur miniature (évite autoplay bloqué iOS)
   const [activated, setActivated] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
 
@@ -198,48 +198,45 @@ function IframePlayer({
     setActivated(false);
     setRetryKey((k) => k + 1);
   }, []);
-
-  // Sur mobile : cliquer sur la miniature charge l'iframe (évite autoplay bloqué)
   const handleActivate = useCallback(() => setActivated(true), []);
 
   return (
-    <div className="absolute inset-0 bg-black touch-manipulation">
-      {/* Miniature YouTube avant activation */}
-      {!activated && !error && thumbnailUrl && (
+    <div className="absolute inset-0 bg-black">
+      {/* ── Avant activation : miniature + bouton play ── */}
+      {!activated && !error && (
         <button
           onClick={handleActivate}
           className="absolute inset-0 w-full h-full touch-manipulation group/play"
           aria-label={`Lire ${title}`}
         >
-          <img
-            src={thumbnailUrl}
-            alt={title}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-          <div className="absolute inset-0 bg-black/30 group-hover/play:bg-black/20 transition-colors" />
-          <span className="absolute inset-0 flex items-center justify-center">
-            <span className="flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-red-600/90 backdrop-blur-sm border-2 border-white/40 shadow-2xl active:scale-95 transition-transform group-hover/play:bg-red-500 group-hover/play:scale-110">
-              <Play className="w-7 h-7 md:w-9 md:h-9 text-white fill-white ml-1" />
+          {thumbnailUrl ? (
+            <>
+              <img
+                src={thumbnailUrl}
+                alt={title}
+                className="absolute inset-0 w-full h-full object-cover"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-black/30 group-hover/play:bg-black/20 transition-colors" />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-slate-900" />
+          )}
+
+          {/* Bouton play central */}
+          <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span
+              className={`flex items-center justify-center w-16 h-16 rounded-full border-2 border-white/50 shadow-2xl transition-transform active:scale-95 group-hover/play:scale-110 ${
+                thumbnailUrl ? 'bg-red-600/90' : 'bg-white/20 backdrop-blur-md border-white/60'
+              }`}
+            >
+              <Play className="w-7 h-7 text-white fill-white ml-1" />
             </span>
           </span>
         </button>
       )}
 
-      {/* Chargement sans miniature */}
-      {!activated && !error && !thumbnailUrl && (
-        <button
-          onClick={handleActivate}
-          className="absolute inset-0 w-full h-full bg-slate-900 flex items-center justify-center touch-manipulation"
-          aria-label={`Lire ${title}`}
-        >
-          <span className="flex items-center justify-center w-16 h-16 rounded-full bg-white/20 backdrop-blur-md border-2 border-white/60 shadow-2xl active:scale-95 transition-transform">
-            <Play className="w-7 h-7 text-white fill-white ml-1" />
-          </span>
-        </button>
-      )}
-
-      {/* Iframe — chargé après activation */}
+      {/* ── Après activation : iframe ── */}
       {activated && !error && (
         <>
           {loading && <LoadingOverlay />}
