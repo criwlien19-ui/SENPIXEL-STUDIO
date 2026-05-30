@@ -161,51 +161,23 @@ export default function Admin() {
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Réinitialiser le champ pour permettre le re-upload du même fichier
+    event.target.value = '';
+
     setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        try {
-          addPhoto(dataUrl);
-        } catch (err: unknown) {
-          const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-          console.error('Error adding photo:', errorMessage);
-          alert("Erreur lors de l'ajout de l'image. Le fichier est peut-être trop volumineux pour le stockage local (quota).");
-        }
-        setIsUploading(false);
-      };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+    try {
+      await addPhoto(file);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+      console.error('Error adding photo:', errorMessage);
+      alert(`Erreur lors de l'ajout de l'image : ${errorMessage}`);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   if (!isAuthenticated) {
@@ -557,13 +529,13 @@ export default function Admin() {
                        <label htmlFor="video-url" className="block text-sm font-bold text-slate-700">URL de la vidéo ou fichier local</label>
                      </div>
                      <div className="relative">
-                       <input 
+                       <input
                          id="video-url"
-                         type="url" 
-                         value={newVideoUrl} 
-                         onChange={e => setNewVideoUrl(e.target.value)} 
-                         placeholder="https://..." 
-                         className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400 outline-none transition-shadow" 
+                         type="url"
+                         value={newVideoUrl}
+                         onChange={e => setNewVideoUrl(e.target.value)}
+                         placeholder="https://drive.google.com/file/d/... ou YouTube/Vimeo"
+                         className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400 outline-none transition-shadow"
                          disabled={isUploading}
                        />
                        <input 
@@ -599,7 +571,7 @@ export default function Admin() {
                            reader.readAsDataURL(file);
                          }}
                        />
-                       <label 
+                       <label
                          htmlFor="video-upload"
                          className={`absolute right-2 top-2 p-2 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors cursor-pointer text-xs font-bold flex items-center gap-1 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                          title="Parcourir"
@@ -607,6 +579,10 @@ export default function Admin() {
                          {isUploading ? 'Chargement...' : <><Upload className="w-3 h-3" /> Fichier</>}
                        </label>
                      </div>
+                     {/* Aide Google Drive */}
+                     <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
+                       <span className="font-bold text-slate-600">Google Drive :</span> ouvrez le fichier vidéo → clic droit → <span className="italic">"Obtenir le lien"</span> → choisir <span className="font-bold text-orange-600">"Toute personne ayant le lien"</span> → coller ici.
+                     </p>
                   </div>
                   <button type="submit" disabled={isUploading} className="w-full md:w-auto px-8 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 disabled:opacity-50 transition shadow-sm active:scale-95">
                     Ajouter

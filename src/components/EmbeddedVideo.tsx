@@ -9,6 +9,40 @@ type EmbeddedVideoProps = {
   title?: string;
 };
 
+// ─── Utilitaire Google Drive ──────────────────────────────────────────────────
+/**
+ * Détecte si l'URL est une URL Google Drive et retourne l'URL d'embed /preview.
+ * Formats reconnus :
+ *   https://drive.google.com/file/d/FILE_ID/view
+ *   https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+ *   https://drive.google.com/file/d/FILE_ID/preview
+ *   https://drive.google.com/open?id=FILE_ID
+ *   https://drive.google.com/uc?id=FILE_ID&export=download
+ *   https://drive.google.com/uc?export=download&id=FILE_ID
+ */
+function getGoogleDriveEmbedUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.includes('drive.google.com')) return null;
+
+    // Format /file/d/FILE_ID/...  (view, edit, preview, etc.)
+    const fileMatch = parsed.pathname.match(/\/file\/d\/([^/?#]+)/);
+    if (fileMatch) {
+      return `https://drive.google.com/file/d/${fileMatch[1]}/preview`;
+    }
+
+    // Format ?id=FILE_ID  (open?id=, uc?id=, etc.)
+    const idParam = parsed.searchParams.get('id');
+    if (idParam) {
+      return `https://drive.google.com/file/d/${idParam}/preview`;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export default function EmbeddedVideo({
   url,
   className = '',
@@ -32,6 +66,8 @@ export default function EmbeddedVideo({
 
   if (!url) return null;
 
+  const googleDriveEmbedUrl = getGoogleDriveEmbedUrl(url);
+
   return (
     <div className={`absolute inset-0 bg-black ${className}`} aria-label={title}>
       {/* Spinner pendant le chargement */}
@@ -40,8 +76,22 @@ export default function EmbeddedVideo({
       {/* Erreur */}
       {error && <ErrorOverlay onRetry={handleRetry} />}
 
-      {/* Lecteur react-player v3 */}
-      {!error && (
+      {/* ── Google Drive : iframe native ── */}
+      {!error && googleDriveEmbedUrl && (
+        <iframe
+          key={retryKey}
+          src={googleDriveEmbedUrl}
+          title={title}
+          allow="autoplay"
+          allowFullScreen
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+          onLoad={handleReady}
+          onError={handleError}
+        />
+      )}
+
+      {/* ── Autres sources (YouTube, Vimeo, etc.) : react-player ── */}
+      {!error && !googleDriveEmbedUrl && (
         <ReactPlayer
           key={retryKey}
           src={url}
@@ -49,7 +99,6 @@ export default function EmbeddedVideo({
           playsInline
           width="100%"
           height="100%"
-          // config youtube : paramètres passés via l'attribut natif du web component
           config={{
             youtube: { colorScheme: 'dark' } as Record<string, unknown>,
             vimeo: { color: 'ff6b00' } as Record<string, unknown>,
