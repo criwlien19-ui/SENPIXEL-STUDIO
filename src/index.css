@@ -11,8 +11,60 @@
   .glass-dark {
     @apply bg-white/80 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_0_rgba(31,38,135,0.1)];
   }
+
+  /* Masque la scrollbar tout en gardant le scroll fonctionnel */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Empêche la sélection de texte sur les éléments interactifs tactiles */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
 }
 
 html {
   scroll-behavior: smooth;
+  /* Évite le rebond horizontal sur iOS */
+  overflow-x: hidden;
+}
+
+body {
+  /* Optimise le rendu du texte sur mobile */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Empêche le zoom automatique sur les inputs iOS */
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Assure que les iframes vidéo s'adaptent sans débordement */
+iframe[src*="youtube"],
+iframe[src*="vimeo"],
+iframe[src*="drive.google"] {
+  max-width: 100%;
+  border: 0;
+}
+
+/* Améliore l'expérience fullscreen sur mobile */
+video::-webkit-media-controls {
+  display: flex !important;
+}
+video:fullscreen,
+video:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+}
+
+/* Scroll snap pour le carousel mobile */
+.snap-x {
+  -webkit-overflow-scrolling: touch;
 }
